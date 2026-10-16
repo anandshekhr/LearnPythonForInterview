@@ -44,9 +44,14 @@ services:
     <<: *backend
     command: ["python", "manage.py", "migrate", "--noinput"]
     restart: "no"
+    healthcheck:
+      disable: true
 
   api:
     <<: *backend
+    ports:
+      # Direct API/Swagger access from the host (loopback only by default). The UI uses Nginx below.
+      - "${API_BIND:-127.0.0.1}:${API_PORT:-8000}:8000"
     depends_on:
       migrate: { condition: service_completed_successfully }
     healthcheck:
@@ -70,6 +75,10 @@ services:
     command: ["celery", "-A", "config", "beat", "-l", "info", "--schedule", "/tmp/celerybeat-schedule"]
     depends_on:
       migrate: { condition: service_completed_successfully }
+    healthcheck:  # beat has no HTTP server; it is healthy while its schedule file is being updated
+      test: ["CMD-SHELL", "test $$(( $$(date +%s) - $$(stat -c %Y /tmp/celerybeat-schedule) )) -lt 600"]
+      interval: 60s
+      retries: 3
 
   browser-worker:
     <<: *backend
@@ -87,7 +96,7 @@ services:
   web:
     build: ./frontend
     ports:
-      - "${WEB_PORT:-8080}:80"
+      - "${WEB_BIND:-0.0.0.0}:${WEB_PORT:-8080}:80"
     depends_on:
       api: { condition: service_healthy }
     restart: unless-stopped

@@ -20,6 +20,18 @@ docker compose --profile browser up -d browser-worker   # optional
 | `browser-worker` | `Dockerfile.browser` | Optional `browser` queue; Chromium installed via Playwright |
 | `web` | frontend | Nginx serving the Angular build, proxying `/api`, `/admin`, `/static`, `/health`; strict CSP |
 
+### Ports
+
+| URL | Service | Setting |
+|---|---|---|
+| `http://localhost:8080` | UI + `/api` through Nginx | `WEB_PORT` (default 8080), `WEB_BIND` (default `0.0.0.0`) |
+| `http://127.0.0.1:8000` | API directly (Swagger at `/api/docs/`, admin at `/admin/`) | `API_PORT` (default 8000), `API_BIND` (default `127.0.0.1`) |
+| `127.0.0.1:5432` / `127.0.0.1:6379` | Postgres / Redis, **only** with `-f docker-compose.dev.yml` | `DB_PORT`, `REDIS_PORT` |
+
+If a port is already in use on your machine (`address already in use`), change the matching variable in `.env`, e.g.
+`WEB_PORT=8081` or `REDIS_PORT=6380`. If you change `WEB_PORT` or serve on another hostname, also update
+`DJANGO_ALLOWED_HOSTS`, `DJANGO_CSRF_TRUSTED_ORIGINS` and `CORS_ALLOWED_ORIGINS`.
+
 Resource footprint at rest is roughly 600–800 MB RAM for the whole stack. Browser automation and AI calls run only in
 workers, never in API requests.
 

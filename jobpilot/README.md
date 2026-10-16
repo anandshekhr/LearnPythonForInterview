@@ -52,7 +52,9 @@ cp .env.example .env
 # Fill in DJANGO_SECRET_KEY, POSTGRES_PASSWORD and DATA_ENCRYPTION_KEY:
 python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 docker compose up -d --build
-open http://localhost:8080          # UI; API docs at http://localhost:8080/api/docs/ (via /api/schema/)
+open http://localhost:8080          # UI (and /api/docs/ for Swagger); API directly on http://127.0.0.1:8000
+# Port already in use? Set WEB_PORT / API_PORT in .env. Postgres/Redis on the host:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 docker compose exec api python manage.py createsuperuser   # optional, for /admin and employer API keys
 ```
 

@@ -1,0 +1,10 @@
+# Optional: publish Postgres and Redis on the host loopback for local tools (psql, DBeaver, redis-cli,
+# or running Django/Celery from your IDE against the containers).
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+services:
+  db:
+    ports:
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+  redis:
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
