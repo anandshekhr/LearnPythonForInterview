@@ -1,0 +1,15 @@
+<!doctype html><html><body>
+<form id="application_form" onsubmit="window.submitted = true; return false;">
+  <input id="first_name" name="job_application[first_name]">
+  <input id="last_name" name="job_application[last_name]">
+  <input id="email" type="email" name="job_application[email]">
+  <input id="phone" type="tel" name="job_application[phone]">
+  <div id="resume_fieldset"><input id="resume" type="file" name="resume"></div>
+  <textarea id="cover_letter_text" name="cover_letter_text"></textarea>
+  <label>LinkedIn <input id="question_1001" name="question_1001"></label>
+  <label>Sponsorship <select id="question_1002" name="question_1002"><option value="">--</option><option value="1">Yes</option><option value="0">No</option></select></label>
+  <label>Gender <select id="gender" name="gender"><option value="">--</option><option value="3">Decline</option></select></label>
+  <button type="submit" id="submit_app">Submit Application</button>
+</form>
+<script>window.submitted = false;</script>
+</body></html>

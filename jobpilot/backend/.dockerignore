@@ -1,0 +1,7 @@
+.venv
+.env
+__pycache__
+*.pyc
+private_media
+staticfiles
+.pytest_cache

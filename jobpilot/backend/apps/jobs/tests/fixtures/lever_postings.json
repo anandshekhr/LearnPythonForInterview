@@ -1,0 +1,30 @@
+[
+  {
+    "id": "8f0c1a2b-1111-4c3d-9e8f-0a1b2c3d4e5f",
+    "text": "Full Stack Engineer - Python/Angular",
+    "createdAt": 1759900000000,
+    "categories": {"location": "Gurgaon", "commitment": "Full Time", "team": "Platform", "department": "Engineering",
+                   "allLocations": ["Gurgaon", "Noida"]},
+    "workplaceType": "hybrid",
+    "descriptionPlain": "Join our platform team building internal tools.",
+    "lists": [
+      {"text": "Requirements", "content": "<li>5+ years of experience building web applications</li><li>Python, Django and Angular</li><li>PostgreSQL</li>"},
+      {"text": "Nice to have", "content": "<li>Docker</li><li>GraphQL</li>"}
+    ],
+    "additionalPlain": "Compensation: ₹28 - 36 LPA",
+    "hostedUrl": "https://jobs.lever.co/examplelever/8f0c1a2b-1111-4c3d-9e8f-0a1b2c3d4e5f",
+    "applyUrl": "https://jobs.lever.co/examplelever/8f0c1a2b-1111-4c3d-9e8f-0a1b2c3d4e5f/apply"
+  },
+  {
+    "id": "8f0c1a2b-2222-4c3d-9e8f-0a1b2c3d4e5f",
+    "text": "Data Engineer",
+    "createdAt": 1759800000000,
+    "categories": {"location": "Bengaluru", "commitment": "Contract", "team": "Data", "department": "Engineering"},
+    "workplaceType": "onsite",
+    "descriptionPlain": "Own our data pipelines.",
+    "lists": [{"text": "Requirements", "content": "<li>4+ years of experience</li><li>Python, Airflow, Spark and SQL</li>"}],
+    "salaryRange": {"currency": "INR", "interval": "per-year-salary", "min": 2000000, "max": 2600000},
+    "hostedUrl": "https://jobs.lever.co/examplelever/8f0c1a2b-2222-4c3d-9e8f-0a1b2c3d4e5f",
+    "applyUrl": "https://jobs.lever.co/examplelever/8f0c1a2b-2222-4c3d-9e8f-0a1b2c3d4e5f/apply"
+  }
+]

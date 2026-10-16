@@ -1,0 +1,21 @@
+# Secrets and local data — never commit
+.env
+backend/.env
+backend/private_media/
+backend/staticfiles/
+*.dump
+backups/
+
+# Python
+backend/.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+
+# Node / Angular
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+
+# E2E artifacts
+e2e-shots/

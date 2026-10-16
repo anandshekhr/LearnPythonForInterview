@@ -1,0 +1,10 @@
+# Optional worker for the "browser" Celery queue (form pre-fill preflight). Heavier image: only build if needed.
+FROM python:3.13-slim
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
+WORKDIR /app
+COPY requirements.txt requirements-browser.txt ./
+RUN pip install -r requirements.txt -r requirements-browser.txt && playwright install --with-deps chromium
+COPY . .
+RUN useradd --create-home --uid 10001 app && mkdir -p /app/private_media && chown -R app /app/private_media
+USER app
+CMD ["celery", "-A", "config", "worker", "-Q", "browser", "--concurrency", "1", "-l", "info"]
