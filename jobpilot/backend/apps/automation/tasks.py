@@ -16,7 +16,7 @@ STALE_RUN = timedelta(minutes=30)
 @shared_task
 def dispatch_due_searches():
     from apps.jobs.models import JobSource
-    from apps.jobs.tasks import sync_source_task
+    from apps.jobs.tasks import queue_sync
 
     now = timezone.now()
     queued: set[int] = set()
@@ -32,7 +32,7 @@ def dispatch_due_searches():
                 if source.last_synced_at and source.last_synced_at > now - MIN_RESYNC:
                     continue
                 queued.add(source.pk)
-                transaction.on_commit(lambda pk=source.pk, uid=search.user_id: sync_source_task.delay(pk, uid))
+                transaction.on_commit(lambda s=source, uid=search.user_id: queue_sync(s, uid))
             search.schedule_next(now)
             search.save(update_fields=["last_run_at", "next_run_at", "updated_at"])
     return {"searches": len(due), "sources_queued": len(queued)}

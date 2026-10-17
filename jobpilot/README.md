@@ -22,6 +22,7 @@ your approval, and it never invents qualifications.
   background parsing into a *draft*, a review screen where you correct everything, then apply → verified profile +
   master resume snapshot. The uploaded master file is never modified.
 - **Discovery**: company registry; Greenhouse and Lever job-board adapters (public, documented listing APIs);
+  Workday career sites; company career pages via schema.org JobPosting (robots.txt-aware, SSRF-safe);
   scheduled sync with throttling, retries, back-off; normalisation (title, seniority, work model, location, salary,
   employment type); dedup by source id, canonical URL and cross-source fingerprint; change detection with history;
   expiry (with a mass-removal guard); source health.
@@ -126,9 +127,10 @@ defaults for every new profile and are fully editable under **Career profile →
 - **Employer keys for automated submission.** Greenhouse and Lever only accept API applications with an
   API key that the employer issues. For a typical candidate, Mode 3 is therefore unavailable, and JobPilot
   falls back to Mode 2 (assisted). It never scrapes or bypasses forms to get around this.
-- **No other sources yet.** Only Greenhouse and Lever are integrated. Ashby was evaluated, but its official
-  documentation couldn't be verified from the build environment, so no adapter ships. Workday,
-  SmartRecruiters and others have no adapter.
+- **Source coverage.** Supported: Greenhouse, Lever, Workday career sites, and company career pages that publish
+  schema.org `JobPosting` data. Workday uses the undocumented endpoint behind the employer's career site and
+  stops on HTTP 403. Career pages without structured data, and job portals such as LinkedIn and Naukri, are not
+  read. Ashby is unverified (see docs/SOURCES.md).
 - **Status tracking is manual.** After submission, application status is updated by you. ATSs don't expose
   candidate-side status.
 - **Matching without an embedding model.** Without one configured, semantic similarity uses lexical hashing

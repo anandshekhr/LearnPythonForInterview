@@ -211,6 +211,9 @@ class NormalizedJob:
     published_at: datetime | None = None
     source_updated_at: datetime | None = None
     raw_metadata: dict = field(default_factory=dict)
+    # True when the source confirmed the job is still listed but details were not re-fetched
+    # (fetched recently); sync then only refreshes last_seen_at.
+    partial: bool = False
 
     def finalize(self) -> "NormalizedJob":
         self.title = clean_text(self.title, 300)
@@ -234,13 +237,16 @@ class NormalizedJob:
         return hashlib.sha256(material.encode()).hexdigest()
 
 
+_TRACKING_PARAM = re.compile(r"^(utm_\w+|ref|source|src|gclid|fbclid|mc_cid|mc_eid|_hs\w+|trk|lever-source.*)$", re.I)
+
+
 def canonical_url(url: str) -> str:
     if not url:
         return ""
     parts = urlsplit(url.strip())
     path = parts.path.rstrip("/") or "/"
-    # Tracking parameters are dropped; ATS ids that live in the query (gh_jid) are kept.
-    keep = "&".join(q for q in parts.query.split("&") if q.split("=")[0] in {"gh_jid", "jobId", "id"})
+    # Tracking parameters are dropped; anything else (job ids such as gh_jid, ?job=123) is kept.
+    keep = "&".join(q for q in parts.query.split("&") if q and not _TRACKING_PARAM.match(q.split("=")[0]))
     return urlunsplit((parts.scheme.lower() or "https", parts.netloc.lower(), path, keep, ""))
 
 

@@ -69,7 +69,7 @@ class JobSourceViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         source = serializer.save(created_by=self.request.user)
         audit.record("source.created", obj=source, request=self.request, source_type=source.source_type)
-        tasks.sync_source_task.delay(source.pk, self.request.user.pk)
+        tasks.queue_sync(source, self.request.user.pk)
 
     @extend_schema(responses={200: dict})
     @action(detail=False, methods=["get"])
@@ -85,7 +85,7 @@ class JobSourceViewSet(viewsets.ModelViewSet):
         source = self.get_object()
         if not source.enabled:
             raise DomainError("Source is disabled.", code="source_disabled", status_code=409)
-        result = tasks.sync_source_task.delay(source.pk, request.user.pk)
+        result = tasks.queue_sync(source, request.user.pk)
         return Response({"queued": True, "task_id": result.id}, status=status.HTTP_202_ACCEPTED)
 
     @extend_schema(request=None, responses={200: dict})

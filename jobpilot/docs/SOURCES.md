@@ -1,7 +1,12 @@
 # Job sources, capabilities and compliance
 
-JobPilot only uses **official, publicly documented** job-board interfaces. It does not scrape authenticated or
-restricted pages and never bypasses CAPTCHA, MFA, rate limits or other access controls.
+JobPilot reads jobs from:
+- documented job-board APIs (Greenhouse, Lever);
+- the public data behind Workday career sites;
+- structured data that companies publish on their own career pages.
+
+It never reads pages that require a login or are otherwise restricted. It obeys robots.txt and never bypasses
+CAPTCHA, MFA, rate limits, HTTP 403 blocks or other access controls.
 
 ## Supported sources
 
@@ -26,13 +31,61 @@ normally does not have one, so:
 - A submission is recorded as submitted only when the API confirms it (Greenhouse: `200` with `success`; Lever:
   `{"ok": true, "applicationId": …}`), or when you confirm that you submitted it yourself.
 
+### Workday career sites (`workday`)
+- **Identifier:** the career site URL, e.g. `https://acme.wd5.myworkdayjobs.com/AcmeCareers`. Open the company's
+  Careers page; if it goes to `…myworkdayjobs.com/…`, copy that address (a locale like `/en-US/` is fine).
+- **How it reads jobs:** Workday has **no documented public jobs API**. Every Workday career site loads its
+  listings anonymously from a JSON endpoint (`/wday/cxs/{tenant}/{site}/jobs`). JobPilot calls that same
+  endpoint, read-only:
+  - it checks robots.txt first;
+  - it waits at least 1.5 s between requests;
+  - it downloads a job's details only when the job is new or was last refreshed more than 7 days ago.
+- **When access is refused:** some employers block automated access (HTTP 403). JobPilot then marks the source
+  as failing and **stops**; it never tries to get around the block.
+- **Options:**
+  - `search_text`: keywords that narrow large employers, e.g. `python`.
+  - `max_jobs`: the most jobs read per sync (default 300, at most 2000).
+- **Capped listings:** if `max_jobs` cuts a listing short, unseen jobs are never expired. A job is expired only
+  when its page returns 404 or 410.
+- **Applying:** Workday applications need a candidate account on the employer's site, so you always apply there.
+  JobPilot links to the posting; there is no API submission or browser pre-fill.
+- **Stability:** the endpoint is undocumented and may change. Parsing is defensive, and errors appear on the
+  source instead of producing bad data.
+
+### Company career pages (`career_page`)
+- **Identifier:** the company's careers listing URL, e.g. `https://www.acme.com/careers`.
+- **What it reads:** only [schema.org `JobPosting`](https://schema.org/JobPosting) structured data (JSON-LD). This
+  is what sites publish so their jobs appear in search engines' job results. Pages without it are skipped and
+  counted in a warning.
+- **How it finds jobs:**
+  1. It reads job postings embedded on the listing page.
+  2. It follows same-site links that look like job pages, or links matching your `job_link_pattern` regex.
+  3. If neither finds anything, it falls back to the sitemap(s) listed in robots.txt, or `/sitemap.xml`.
+- **Options:**
+  - `job_link_pattern`: a regex that selects job links.
+  - `max_jobs`: the most jobs read per sync (default 100, at most 500).
+  - `render_js`: for careers pages built entirely with JavaScript. This runs on the browser worker, and every
+    request the page makes goes through the same public-host check.
+- **Already an ATS?** If the careers page links to Greenhouse, Lever or Workday, JobPilot shows a warning
+  suggesting you add that board instead. If the URL itself is one of those boards, it is rejected with the same
+  advice.
+- **Safety rules:**
+  - robots.txt is always obeyed. If robots.txt can't be fetched because of a server error, nothing is crawled.
+  - The minimum interval between requests is 2 s.
+  - Pages are capped at 5 MB.
+  - Only public hosts on ports 80/443 are allowed. Private, loopback, link-local (cloud metadata) and other
+    non-public addresses are refused, including after redirects.
+- **Expiry:** a job is expired only when its page returns 404 or 410, redirects elsewhere, or its `validThrough`
+  date has passed.
+- **Applying:** applications happen on the company's own site.
+
 ### Sources evaluated but not integrated
 - **Ashby** (`api.ashbyhq.com/posting-api/job-board/{name}`): appears to offer a public listing endpoint, but its
-  official documentation could not be retrieved from the build environment, and the third-party descriptions found
-  disagree on the response shape. Per project policy it is not integrated until verified against Ashby's own docs.
-- LinkedIn, Naukri, Indeed and similar aggregators: their terms do not permit automated access to listings or
-  applications without a partnership, so there are no adapters.
-- Workday, SmartRecruiters, iCIMS and others: possible future adapters, each requiring separate verification of the
+  official documentation could not be retrieved, and third-party descriptions disagree. It is not integrated
+  until verified. (Ashby boards that publish JSON-LD can still be added as a `career_page`.)
+- **LinkedIn, Naukri, Indeed and similar job portals:** their terms don't allow automated access without a
+  partnership, so there are no adapters.
+- **SmartRecruiters, iCIMS and others:** possible future adapters, each needing separate verification of its
   current documentation and terms.
 
 ## Browser assistance (Playwright)

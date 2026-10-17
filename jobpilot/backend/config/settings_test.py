@@ -13,3 +13,4 @@ LLM_PROVIDER = "none"
 EMBEDDING_PROVIDER = "hashing"
 SOURCE_HTTP_BACKOFF_SECONDS = 0
 SOURCE_THROTTLE_ENABLED = False
+SOURCE_ALLOW_PRIVATE_HOSTS = True  # tests use fake hosts; SSRF tests switch this off

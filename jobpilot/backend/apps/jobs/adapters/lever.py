@@ -27,6 +27,7 @@ def _ms(value):
 
 class LeverAdapter(JobSourceAdapter):
     source_type = "lever"
+    allowed_config = {"region": str}
     capabilities = SourceCapabilities(
         salary_data=True,
         application_questions=False,

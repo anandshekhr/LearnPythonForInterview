@@ -65,6 +65,9 @@ class SubmissionNotSupported(Exception):
 class JobSourceAdapter(ABC):
     source_type: str = ""
     capabilities = SourceCapabilities()
+    allowed_config: dict[str, type] = {}
+    public_only = False  # fetches user-supplied hosts: enable SSRF protection
+    min_request_interval = 0.5
 
     def __init__(self, identifier: str, config: dict | None = None, http: SourceHttpClient | None = None,
                  api_key: str = ""):
@@ -72,6 +75,27 @@ class JobSourceAdapter(ABC):
         self.config = config or {}
         self.http = http or SourceHttpClient(throttle_key=f"{self.source_type}:{identifier}")
         self.api_key = api_key
+        # Set by the sync service: {external_id: when details were last stored}. Adapters may skip
+        # re-downloading details for recently refreshed jobs and yield NormalizedJob(partial=True).
+        self.known_jobs: dict = {}
+        # False when the listing was capped/truncated: unseen jobs must then not be expired.
+        self.listing_complete = True
+        self.warnings: list[str] = []
+
+    @classmethod
+    def validate_config(cls, config: dict) -> dict:
+        config = dict(config or {})
+        unknown = set(config) - set(cls.allowed_config)
+        if unknown:
+            raise AdapterConfigError(f"Unsupported options {sorted(unknown)}; allowed: {sorted(cls.allowed_config) or 'none'}.")
+        for key, kind in cls.allowed_config.items():
+            if key in config and config[key] is not None and not isinstance(config[key], kind):
+                raise AdapterConfigError(f"'{key}' must be of type {kind.__name__}.")
+        return config
+
+    def confirm_removed(self, job) -> bool:
+        """Called for jobs missing from a complete listing. Return False to keep the job active."""
+        return True
 
     @classmethod
     def validate_identifier(cls, identifier: str) -> str:

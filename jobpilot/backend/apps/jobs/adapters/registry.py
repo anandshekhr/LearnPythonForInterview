@@ -1,10 +1,14 @@
 from .base import JobSourceAdapter
+from .career_page import CareerPageAdapter
 from .greenhouse import GreenhouseAdapter
 from .lever import LeverAdapter
+from .workday import WorkdayAdapter
 
 ADAPTERS: dict[str, type[JobSourceAdapter]] = {
     GreenhouseAdapter.source_type: GreenhouseAdapter,
     LeverAdapter.source_type: LeverAdapter,
+    WorkdayAdapter.source_type: WorkdayAdapter,
+    CareerPageAdapter.source_type: CareerPageAdapter,
 }
 
 
@@ -20,6 +24,7 @@ def adapter_for(source, http=None, with_credentials=False) -> JobSourceAdapter:
 
     cls = get_adapter_class(source.source_type)
     http = http or SourceHttpClient(throttle_key=f"{source.source_type}:{source.identifier}",
-                                    min_interval=source.min_request_interval_seconds)
+                                    min_interval=max(source.min_request_interval_seconds, cls.min_request_interval),
+                                    public_only=cls.public_only)
     api_key = source.get_submission_api_key() if with_credentials and source.has_submission_key else ""
     return cls(source.identifier, source.config, http=http, api_key=api_key)

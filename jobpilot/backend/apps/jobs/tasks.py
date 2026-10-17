@@ -41,6 +41,12 @@ def sync_source_task(self, source_id: int, user_id: int | None = None):
     return {"status": "ok", **result.as_stats()}
 
 
+def queue_sync(source, user_id=None):
+    """Queue a sync; sources that render JavaScript run on the browser worker (has Chromium)."""
+    queue = "browser" if (source.config or {}).get("render_js") else "celery"
+    return sync_source_task.apply_async(args=[source.pk, user_id], queue=queue)
+
+
 def _notify_source_failure(source, message):
     from apps.notifications.models import Notification
     from apps.notifications.service import notify
@@ -89,10 +95,10 @@ def sync_due_sources():
     due = JobSource.objects.filter(enabled=True).exclude(status=JobSource.Status.DISABLED).filter(
         Q(last_synced_at__isnull=True) | Q(last_synced_at__lte=now - timedelta(minutes=1) * F("sync_interval_minutes"))
     )
-    ids = list(due.values_list("pk", flat=True))
-    for pk in ids:
-        sync_source_task.delay(pk)
-    return len(ids)
+    sources = list(due)
+    for source in sources:
+        queue_sync(source)
+    return len(sources)
 
 
 @shared_task

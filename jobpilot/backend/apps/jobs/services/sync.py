@@ -68,6 +68,7 @@ def _values(source: JobSource, nj: NormalizedJob) -> dict:
         "content_hash": nj.content_hash,
         "fingerprint": job_fingerprint(source.company_id, nj.title, nj.locations),
         "raw_metadata": nj.raw_metadata,
+        "details_fetched_at": timezone.now(),
     }
 
 
@@ -78,7 +79,25 @@ def _find_duplicate(job: JobPosting):
         fingerprint=job.fingerprint).order_by("first_seen_at").first()
 
 
+def touch_job(source: JobSource, nj: NormalizedJob, now, result: SyncResult):
+    """Job still listed, details not re-fetched: refresh last_seen_at (and reactivate if needed)."""
+    with transaction.atomic():
+        job = JobPosting.objects.select_for_update().filter(source=source, external_id=nj.external_id).first()
+        if job is None:
+            return
+        job.last_seen_at = now
+        if job.status == JobPosting.Status.EXPIRED:
+            job.status, job.expired_at = JobPosting.Status.ACTIVE, None
+            JobPostingChange.objects.create(job=job, change_type="reactivated")
+            result.reactivated.append(job.pk)
+        else:
+            result.unchanged += 1
+        job.save(update_fields=["last_seen_at", "status", "expired_at", "updated_at"])
+
+
 def upsert_job(source: JobSource, nj: NormalizedJob, now, result: SyncResult):
+    if nj.partial:
+        return touch_job(source, nj, now, result)
     values = _values(source, nj)
     with transaction.atomic():
         job = JobPosting.objects.select_for_update().filter(source=source, external_id=nj.external_id).first()
@@ -116,18 +135,30 @@ def expire_job(job: JobPosting, now):
     JobPostingChange.objects.create(job=job, change_type="expired")
 
 
+MAX_REMOVAL_CHECKS = 50
+
+
 def sync_source(source: JobSource, http=None) -> SyncResult:
     result = SyncResult()
     now = timezone.now()
     adapter = adapter_for(source, http=http)
+    adapter.known_jobs = dict(JobPosting.objects.filter(source=source, details_fetched_at__isnull=False)
+                              .values_list("external_id", "details_fetched_at"))
     try:
-        listings = list(adapter.fetch_listings())  # network: no DB transaction held
-    except SourceHTTPError as exc:
-        record_failure(source, str(exc))
-        raise
+        try:
+            listings = list(adapter.fetch_listings())  # network: no DB transaction held
+        except SourceHTTPError as exc:
+            record_failure(source, str(exc))
+            raise
+        _store(source, adapter, listings, now, result)
     finally:
         if http is None:
             adapter.http.close()
+    return result
+
+
+def _store(source, adapter, listings, now, result):
+    result.warnings.extend(adapter.warnings[:10])
 
     seen_ids = set()
     for nj in listings:
@@ -143,19 +174,26 @@ def sync_source(source: JobSource, http=None) -> SyncResult:
     active = JobPosting.objects.filter(source=source, status=JobPosting.Status.ACTIVE).exclude(external_id__in=seen_ids)
     missing = list(active)
     previously_active = JobPosting.objects.filter(source=source, status=JobPosting.Status.ACTIVE).count()
-    if previously_active >= 5 and len(missing) / previously_active > MASS_REMOVAL_GUARD:
+    if not adapter.listing_complete:
+        if missing:
+            result.warnings.append(f"Listing was capped; {len(missing)} unseen jobs kept active (not confirmed removed).")
+    elif previously_active >= 5 and len(missing) / previously_active > MASS_REMOVAL_GUARD:
         result.warnings.append(f"Refused to expire {len(missing)} of {previously_active} jobs in one sync; will re-check next run.")
     else:
-        for job in missing:
-            expire_job(job, now)
-            result.expired.append(job.pk)
+        for job in missing[:MAX_REMOVAL_CHECKS]:
+            try:
+                gone = adapter.confirm_removed(job)  # network, outside any transaction
+            except SourceHTTPError:
+                gone = False
+            if gone:
+                expire_job(job, now)
+                result.expired.append(job.pk)
 
     JobSource.objects.filter(pk=source.pk).update(
         status=JobSource.Status.ACTIVE, last_synced_at=now, last_success_at=now, last_error="", consecutive_failures=0,
         active_job_count=JobPosting.objects.filter(source=source, status=JobPosting.Status.ACTIVE).count(),
     )
     logger.info("source_synced", extra={"source_id": source.pk, "sync_stats": result.as_stats()})
-    return result
 
 
 def record_failure(source: JobSource, message: str):

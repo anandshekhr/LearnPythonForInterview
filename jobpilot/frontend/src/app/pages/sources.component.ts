@@ -15,7 +15,7 @@ interface SourceType { source_type: string; label: string; capabilities: Capabil
   standalone: true,
   imports: [...MATERIAL, PageHeaderComponent, LoadingComponent, EmptyStateComponent],
   template: `
-  <jp-page-header title="Companies & sources" subtitle="Official, publicly documented job-board APIs only.">
+  <jp-page-header title="Companies & sources" subtitle="Company job boards and career pages, read politely: robots.txt is obeyed and blocks are never bypassed.">
     <button mat-stroked-button (click)="addCompany()"><mat-icon>add_business</mat-icon> Add company</button>
     <button mat-flat-button color="primary" (click)="addSource()" [disabled]="!companies().length"><mat-icon>add_link</mat-icon> Add job source</button>
   </jp-page-header>
@@ -33,7 +33,7 @@ interface SourceType { source_type: string; label: string; capabilities: Capabil
     <mat-card class="item-card">
       <div class="row wrap">
         <span class="dot" [class]="'dot-' + s.status"></span>
-        <div class="grow"><div class="strong">{{ s.company_name }} <span class="muted">({{ s.source_type }}: {{ s.identifier }})</span></div>
+        <div class="grow"><div class="strong">{{ s.company_name }} <span class="muted break">({{ s.source_type }}: {{ s.identifier }})</span></div>
           <div class="muted small">{{ s.status }} · {{ s.active_job_count }} active jobs · last success {{ s.last_success_at ? (s.last_success_at | date: 'short') : 'never' }}
             · every {{ s.sync_interval_minutes / 60 }} h</div>
           @if (s.last_error) { <div class="error-text small">{{ s.last_error }}</div> }
@@ -41,7 +41,9 @@ interface SourceType { source_type: string; label: string; capabilities: Capabil
             <span class="cap" [class.on]="s.capabilities.list_jobs">listings</span>
             <span class="cap" [class.on]="s.capabilities.salary_data">salary</span>
             <span class="cap" [class.on]="s.capabilities.application_questions">questions</span>
-            <span class="cap" [class.on]="s.capabilities.api_submission_active" [matTooltip]="s.capabilities.api_submission_requires">API submission {{ s.capabilities.api_submission_active ? 'active' : 'needs employer key' }}</span>
+            @if (s.capabilities.api_submission) {
+              <span class="cap" [class.on]="s.capabilities.api_submission_active" [matTooltip]="s.capabilities.api_submission_requires">API submission {{ s.capabilities.api_submission_active ? 'active' : 'needs employer key' }}</span>
+            } @else { <span class="cap" matTooltip="Apply on the employer's site">apply on company site</span> }
           </div>
         </div>
         <mat-slide-toggle [checked]="s.enabled" [disabled]="!s.can_edit" (change)="toggle(s, $event.checked)">Enabled</mat-slide-toggle>
@@ -95,8 +97,14 @@ export class SourcesComponent implements OnInit {
   }
 
   hint(type: string): string {
-    return type === 'greenhouse' ? 'Identifier = board token: the part after boards.greenhouse.io/ (e.g. "acme" for boards.greenhouse.io/acme).'
-      : type === 'lever' ? 'Identifier = site name: the part after jobs.lever.co/ (e.g. "acme"). Use region "eu" for jobs.eu.lever.co.' : '';
+    return {
+      greenhouse: 'Identifier = board token: the part after boards.greenhouse.io/ (e.g. "acme" for boards.greenhouse.io/acme).',
+      lever: 'Identifier = site name: the part after jobs.lever.co/ (e.g. "acme"). Use region "eu" for jobs.eu.lever.co.',
+      workday: 'Identifier = the career site URL, e.g. https://acme.wd5.myworkdayjobs.com/AcmeCareers (open the company\'s Careers '
+        + 'page; if it goes to myworkdayjobs.com, copy that address). Use search keywords to narrow large employers.',
+      career_page: 'Identifier = the company\'s careers listing URL, e.g. https://www.acme.com/careers. Works when job pages publish '
+        + 'schema.org JobPosting data (most sites that appear in Google job search do).',
+    }[type] ?? '';
   }
 
   addCompany(c?: Company): void {
@@ -110,13 +118,34 @@ export class SourcesComponent implements OnInit {
   }
 
   addSource(): void {
-    this.dialog.open(FormDialogComponent, { width: '560px', data: { title: 'Add job source', value: { source_type: 'greenhouse', sync_interval_minutes: 360 }, fields: [
+    this.dialog.open(FormDialogComponent, { width: '600px', maxWidth: '95vw', data: { title: 'Add job source',
+      value: { source_type: 'greenhouse', sync_interval_minutes: 360, render_js: false }, fields: [
       { key: 'company', label: 'Company', type: 'select', required: true, options: this.companies().map(c => ({ value: c.id as any, label: c.name })) },
       { key: 'source_type', label: 'Source type', type: 'select', required: true, options: this.types().map(t => ({ value: t.source_type, label: t.label })) },
-      { key: 'identifier', label: 'Board token / site name', required: true, hint: 'See “Supported sources” above' },
-      { key: 'sync_interval_minutes', label: 'Sync interval (minutes, min 60)', type: 'number' }] } })
-      .afterClosed().subscribe(v => v && this.api.post('sources/', v).subscribe({
-        next: () => { this.notify.success('Source added. The first synchronisation has started.'); this.pendingUntil = Date.now() + 60000; this.load(); }, error: e => this.notify.error(e) }));
+      { key: 'identifier', label: 'Board token, site name or URL', required: true,
+        hint: 'Greenhouse/Lever: board name · Workday: career site URL · Career page: careers URL (see “Supported sources”)' },
+      { key: 'sync_interval_minutes', label: 'Sync interval (minutes, min 60)', type: 'number' },
+      { key: 'search_text', label: 'Workday only: search keywords (optional)', hint: 'e.g. python — narrows large employers' },
+      { key: 'max_jobs', label: 'Workday / career page: max jobs per sync (optional)', type: 'number' },
+      { key: 'job_link_pattern', label: 'Career page only: job link pattern (optional regex)', hint: 'e.g. /careers/job/ — leave empty to auto-detect' },
+      { key: 'render_js', label: 'Career page only: render JavaScript (needs the browser worker)', type: 'checkbox' }] } })
+      .afterClosed().subscribe(v => {
+        if (!v) return;
+        const { search_text, max_jobs, job_link_pattern, render_js, ...body } = v;
+        const config: Record<string, unknown> = {};
+        if (body.source_type === 'workday') {
+          if (search_text) config['search_text'] = search_text;
+          if (max_jobs) config['max_jobs'] = Number(max_jobs);
+        }
+        if (body.source_type === 'career_page') {
+          if (job_link_pattern) config['job_link_pattern'] = job_link_pattern;
+          if (max_jobs) config['max_jobs'] = Number(max_jobs);
+          if (render_js) config['render_js'] = true;
+        }
+        this.api.post('sources/', { ...body, config }).subscribe({
+          next: () => { this.notify.success('Source added. The first synchronisation has started.'); this.pendingUntil = Date.now() + 60000; this.load(); },
+          error: e => this.notify.error(e) });
+      });
   }
 
   toggle(s: JobSource, enabled: boolean): void {

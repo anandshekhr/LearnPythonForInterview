@@ -146,3 +146,33 @@ def test_disabled_by_default(settings):
     settings.BROWSER_AUTOMATION_ENABLED = False
     with pytest.raises(AssistNotPermitted):
         run_assist_for_application(app.pk)
+
+
+def test_career_page_js_rendering(server, respx_mock, settings, monkeypatch):
+    """render_js discovers links created by JavaScript; non-public requests from the page are aborted."""
+    import json as _json
+
+    from apps.jobs import crawl
+    from apps.jobs.services.sync import sync_source
+
+    blocked = []
+    original = crawl.check_public_url
+
+    def guard(url):
+        if "169.254" in url:
+            blocked.append(url)
+            raise crawl.UnsafeURL("non-public")
+        return original(url)
+
+    monkeypatch.setattr(crawl, "check_public_url", guard)
+    monkeypatch.setattr("apps.jobs.adapters.career_page.check_public_url", guard)
+    respx_mock.get(f"{server}/robots.txt").respond(404)
+    posting = {"@context": "https://schema.org", "@type": "JobPosting", "title": "Platform Engineer",
+               "description": "Python, Kubernetes", "datePosted": "2026-10-01"}
+    respx_mock.get(f"{server}/jobs/42-platform-engineer").respond(
+        200, html=f'<script type="application/ld+json">{_json.dumps(posting)}</script>')
+    source = JobSource.objects.create(company=Company.objects.create(name="SPA Co"), source_type="career_page",
+                                      identifier=f"{server}/careers_spa.html", config={"render_js": True})
+    result = sync_source(source)
+    assert [j.title for j in JobPosting.objects.filter(pk__in=result.created)] == ["Platform Engineer"]
+    assert blocked, "request to the metadata address should have been intercepted"

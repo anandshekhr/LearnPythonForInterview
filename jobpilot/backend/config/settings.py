@@ -279,6 +279,11 @@ SOURCE_API_BASE_OVERRIDES = dict(
 )
 if SOURCE_API_BASE_OVERRIDES and not (DEBUG or TESTING):
     raise RuntimeError("SOURCE_API_BASE_OVERRIDES is only allowed with DJANGO_DEBUG=1")
+# Career-page/Workday fetching refuses private, loopback and link-local addresses (SSRF protection).
+# Only for local development against a mock server; refused in production.
+SOURCE_ALLOW_PRIVATE_HOSTS = env_bool("SOURCE_ALLOW_PRIVATE_HOSTS", False)
+if SOURCE_ALLOW_PRIVATE_HOSTS and not (DEBUG or TESTING):
+    raise RuntimeError("SOURCE_ALLOW_PRIVATE_HOSTS is only allowed with DJANGO_DEBUG=1")
 BROWSER_AUTOMATION_ENABLED = env_bool("BROWSER_AUTOMATION_ENABLED", False)
 BROWSER_HEADLESS = env_bool("BROWSER_HEADLESS", True)
 BROWSER_EXECUTABLE_PATH = env("BROWSER_EXECUTABLE_PATH", "")

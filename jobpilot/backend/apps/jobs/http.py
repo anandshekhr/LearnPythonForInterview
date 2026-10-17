@@ -25,7 +25,8 @@ class SourceHTTPError(Exception):
 
 class SourceHttpClient:
     def __init__(self, throttle_key: str, min_interval: float = 1.0, max_retries: int = 3, backoff_base: float | None = None,
-                 timeout: float | None = None, sleep=time.sleep, transport: httpx.BaseTransport | None = None):
+                 timeout: float | None = None, sleep=time.sleep, transport: httpx.BaseTransport | None = None,
+                 public_only: bool = False):
         self.throttle_key = f"source-throttle:{throttle_key}"
         self.min_interval = max(0.0, min_interval)
         self.max_retries = max_retries
@@ -36,7 +37,18 @@ class SourceHttpClient:
             headers={"User-Agent": settings.SOURCE_USER_AGENT, "Accept": "application/json"},
             follow_redirects=True,
             transport=transport,
+            # Re-validated on every request and redirect hop when fetching user-supplied URLs.
+            event_hooks={"request": [self._check_public]} if public_only else {},
         )
+
+    @staticmethod
+    def _check_public(request):
+        from .crawl import UnsafeURL, check_public_url
+
+        try:
+            check_public_url(str(request.url))
+        except UnsafeURL as exc:
+            raise SourceHTTPError(str(exc)) from exc
 
     def close(self):
         self.client.close()
@@ -89,6 +101,13 @@ class SourceHttpClient:
             except ValueError:
                 pass
         return min(self.backoff_base * (2 ** attempt) + random.uniform(0, self.backoff_base), 60.0)
+
+    def get_text(self, url: str, **kwargs) -> str:
+        headers = {"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", **kwargs.pop("headers", {})}
+        response = self.request("GET", url, headers=headers, **kwargs)
+        if len(response.content) > 5 * 1024 * 1024:
+            raise SourceHTTPError("Page is larger than 5 MB; skipped")
+        return response.text
 
     def get_json(self, url: str, **kwargs):
         response = self.request("GET", url, **kwargs)

@@ -51,6 +51,9 @@ class JobSourceSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Minimum sync interval is 60 minutes (be polite to job boards).")
         return value
 
+    def validate_identifier(self, value):
+        return value.strip()
+
     def validate_min_request_interval_seconds(self, value):
         if value < 0.5:
             raise serializers.ValidationError("Minimum is 0.5 seconds between requests.")
@@ -65,13 +68,12 @@ class JobSourceSerializer(serializers.ModelSerializer):
                 attrs["identifier"] = get_adapter_class(source_type).validate_identifier(attrs["identifier"])
             except AdapterConfigError as exc:
                 raise serializers.ValidationError({"identifier": str(exc)})
-        config = attrs.get("config")
-        if config is not None:
-            allowed = {"region"}
-            if set(config) - allowed:
-                raise serializers.ValidationError({"config": f"Allowed keys: {sorted(allowed)}"})
-            if config.get("region") not in (None, "eu", "us"):
-                raise serializers.ValidationError({"config": "region must be 'us' or 'eu'."})
+        if "config" in attrs or "source_type" in attrs:
+            try:
+                attrs["config"] = get_adapter_class(source_type).validate_config(
+                    attrs.get("config", getattr(self.instance, "config", {})))
+            except AdapterConfigError as exc:
+                raise serializers.ValidationError({"config": str(exc)})
         return attrs
 
 

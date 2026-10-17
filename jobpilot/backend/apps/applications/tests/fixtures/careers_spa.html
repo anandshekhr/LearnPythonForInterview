@@ -1,0 +1,6 @@
+<!doctype html><html><body><div id="app">Loading…</div>
+<script>
+  // Links only exist after JavaScript runs, like many single-page careers sites.
+  document.getElementById('app').innerHTML = '<a href="/jobs/42-platform-engineer">Platform Engineer</a>';
+  fetch('http://169.254.169.254/latest/meta-data/').catch(() => {});
+</script></body></html>

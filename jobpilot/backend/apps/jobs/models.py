@@ -43,7 +43,8 @@ class JobSource(TimeStampedModel):
     class SourceType(models.TextChoices):
         GREENHOUSE = "greenhouse", "Greenhouse Job Board API"
         LEVER = "lever", "Lever Postings API"
-        ASHBY = "ashby", "Ashby Job Board API"
+        WORKDAY = "workday", "Workday career site"
+        CAREER_PAGE = "career_page", "Company career page (schema.org JobPosting)"
 
     class Status(models.TextChoices):
         UNVERIFIED = "unverified", "Not yet synchronised"
@@ -54,7 +55,7 @@ class JobSource(TimeStampedModel):
 
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="sources")
     source_type = models.CharField(max_length=20, choices=SourceType.choices)
-    identifier = models.CharField(max_length=120, help_text="Board token / site name on the ATS")
+    identifier = models.CharField(max_length=500, help_text="Board token / site name, Workday site URL, or careers page URL")
     config = models.JSONField(default=dict, blank=True, help_text="Adapter-specific options, e.g. {'region': 'eu'}")
     enabled = models.BooleanField(default=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.UNVERIFIED, db_index=True)
@@ -150,6 +151,8 @@ class JobPosting(TimeStampedModel):
     embedding = VectorField(dimensions=settings.EMBEDDING_DIMENSIONS, null=True, blank=True)
     embedding_hash = models.CharField(max_length=64, blank=True)
     raw_metadata = models.JSONField(default=dict, blank=True)
+    # When full details were last downloaded (adapters skip re-downloading recent ones).
+    details_fetched_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-published_at", "-first_seen_at"]
